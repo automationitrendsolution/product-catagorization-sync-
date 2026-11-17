@@ -1,0 +1,22 @@
+[project]
+name = "product-categorisation-sync"
+version = "1.0.0"
+description = "powerbidb: product_categorisation + _gr + _non_us + _uk -> product_categorisation_us_ca_uk_it, validated by (MarketPlace, Child ASIN)"
+requires-python = ">=3.11"
+dependencies = [
+    "mysql-connector-python>=9.0.0",
+    "python-dotenv>=1.0.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.2.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q --strict-markers"

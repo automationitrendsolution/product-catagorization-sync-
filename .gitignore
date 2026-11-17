@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# Secrets
+.env
+
+# Runtime output
+data/reports/*
+data/backups/*
+data/*.lock
+logs/*
+!data/**/.gitkeep
+!logs/.gitkeep
+data/last_sync_state.json
