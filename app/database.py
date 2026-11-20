@@ -24,12 +24,23 @@ from .merge import (GR_COLUMNS, INT_COLUMNS, NON_US_NEW_ROW, SRC_GR, SRC_NON_US,
 
 logger = get_logger("db")
 
-#: Columns each source must have (extra columns such as id/Season are ignored).
+#: Source columns used when present, skipped (with a warning) when missing. A source
+#: table can be dropped and re-created by whatever loads it (product_categorisation_non_us
+#: was, on 2026-11-17, losing its season column); that must not stop the whole sync.
+#: When a source lacks the column, the target's value is left as it is for that source's rows.
+OPTIONAL_COLUMNS: dict[str, tuple[str, ...]] = {
+    SRC_US: ("Season",),
+    SRC_UK: ("Season",),
+    SRC_GR: ("Season",),
+    SRC_NON_US: ("season",),
+}
+
+#: Columns each table must have (extra columns such as id are ignored).
 REQUIRED_COLUMNS: dict[str, tuple[str, ...]] = {
-    SRC_US: TARGET_COLUMNS,
-    SRC_UK: TARGET_COLUMNS,
-    SRC_GR: GR_COLUMNS,
-    SRC_NON_US: ("id", *NON_US_NEW_ROW),
+    SRC_US: tuple(c for c in TARGET_COLUMNS if c not in OPTIONAL_COLUMNS[SRC_US]),
+    SRC_UK: tuple(c for c in TARGET_COLUMNS if c not in OPTIONAL_COLUMNS[SRC_UK]),
+    SRC_GR: tuple(c for c in GR_COLUMNS if c not in OPTIONAL_COLUMNS[SRC_GR]),
+    SRC_NON_US: ("id", *(c for c in NON_US_NEW_ROW if c not in OPTIONAL_COLUMNS[SRC_NON_US])),
     TARGET_TABLE: TARGET_COLUMNS,
 }
 INSERT_CHUNK = 500
@@ -43,6 +54,8 @@ class PowerBIDatabase:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self._conn = None
+        #: optional columns found by check_schema(), per table
+        self._optional_present: dict[str, tuple[str, ...]] = {}
 
     # -- connection ---------------------------------------------------------
     def connect(self) -> None:
@@ -103,10 +116,19 @@ class PowerBIDatabase:
                 problems.append(f"{table} lacks column(s): {', '.join(missing)}")
         if problems:
             raise SchemaError("; ".join(problems))
+        for table, cols in OPTIONAL_COLUMNS.items():
+            lower = {c.lower() for c in have[table]}  # MySQL column names are case-insensitive
+            present = tuple(c for c in cols if c.lower() in lower)
+            self._optional_present[table] = present
+            for c in cols:
+                if c not in present:
+                    logger.warning("%s has no %r column: it is skipped for this table's rows, and the "
+                                   "target keeps its current value (re-add it with sql/add_season_column.sql)",
+                                   table, c)
         logger.info("Schema OK: 4 sources + %s", TARGET_TABLE)
 
     def fetch(self, table: str) -> list[dict[str, Any]]:
-        cols = REQUIRED_COLUMNS[table]
+        cols = REQUIRED_COLUMNS[table] + self._optional_present.get(table, ())
         try:
             with self._cursor(dictionary=True) as cur:
                 cur.execute(f"SELECT {', '.join(q(c) for c in cols)} FROM {q(table)}")

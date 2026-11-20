@@ -133,7 +133,9 @@ class MergeResult:
 
 
 def _take(row: dict[str, Any], columns: Iterable[str]) -> dict[str, Any]:
-    return {c: normalise(c, row.get(c)) for c in columns}
+    """Managed values of a source row. A column the source table does not have
+    (not even as NULL) is not managed, so the target keeps its own value."""
+    return {c: normalise(c, row.get(c)) for c in columns if c in row}
 
 
 def build_desired(sources: dict[str, list[dict[str, Any]]], *, marketplaces: Iterable[str],
@@ -206,6 +208,8 @@ def build_desired(sources: dict[str, list[dict[str, Any]]], *, marketplaces: Ite
         else:
             values: dict[str, Any] = {}
             for src_col, tgt_cols in NON_US_NEW_ROW.items():
+                if src_col not in r:
+                    continue  # column missing from the table (e.g. season): left to the target
                 for c in tgt_cols:
                     values[c] = normalise(c, r.get(src_col))
             values["MarketPlace"], values["Child ASIN"] = key

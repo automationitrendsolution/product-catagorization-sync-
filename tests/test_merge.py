@@ -116,3 +116,14 @@ def test_season_is_carried_from_every_source():
     assert m.rows[("CA", "B1")].values["Season"] == "Monsoon"      # non_us overrides when not blank
     assert m.rows[("DE", "B2")].values["Season"] == "Winter"       # blank non_us season does not override
     assert m.rows[("IT", "B3")].values["Season"] == "All Season"   # new non_us row
+
+
+def test_missing_season_column_leaves_target_season_alone():
+    # product_categorisation_non_us re-created without its season column
+    m = merged(**{SRC_NON_US: [non_us(1, "B7", "IT")]})
+    assert "Season" not in m.rows[("IT", "B7")].values
+    target = [full("B7", "IT", Season="Winter", **{"Parent ASIN": "PB7", "Child Short Name": "short",
+              "Child": "short", "Parent": "par", "Parent Short name": "par", "Product Owner": "Ashwin",
+              "Product Lead": "L", "Manager": "M", "Sort": None})]
+    d = diff(m.rows, target)
+    assert d.in_sync  # Season "Winter" is kept, not wiped to NULL
